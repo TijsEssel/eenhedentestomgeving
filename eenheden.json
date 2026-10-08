@@ -18,7 +18,7 @@
     "ft": {
       "name": "voet",
       "symbol": "ft",
-      "factor_to_base": 0.3048
+      "factor_to_base": 3.048
     }
   }
 }
