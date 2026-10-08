@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eenhedenomzetter</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: #f3f6f9;
+      color: #17212b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    main {
+      width: min(100%, 620px);
+      background: #ffffff;
+      border: 1px solid #dbe3ea;
+      border-radius: 16px;
+      box-shadow: 0 12px 35px rgba(23, 33, 43, 0.10);
+      padding: 30px;
+    }
+
+    h1 { margin: 0 0 8px; color: #075ea8; }
+    #description { margin: 0 0 24px; color: #4c5b68; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .field { margin-bottom: 18px; }
+
+    label {
+      display: block;
+      margin-bottom: 7px;
+      font-weight: 650;
+    }
+
+    input, select {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid #aab8c4;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #ffffff;
+      color: #17212b;
+      font: inherit;
+    }
+
+    input:focus, select:focus {
+      outline: 3px solid rgba(0, 120, 212, 0.18);
+      border-color: #0078d4;
+    }
+
+    button {
+      width: 100%;
+      min-height: 46px;
+      border: 0;
+      border-radius: 8px;
+      padding: 11px 18px;
+      background: #0078d4;
+      color: #ffffff;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover { background: #005fa8; }
+
+    #result {
+      margin-top: 20px;
+      padding: 16px;
+      border-left: 5px solid #0078d4;
+      border-radius: 6px;
+      background: #edf6fc;
+      font-size: 1.15rem;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      margin-top: 14px;
+      min-height: 1.4em;
+      color: #52616d;
+      font-size: 0.92rem;
+    }
+
+    .error {
+      border-left-color: #c42b1c !important;
+      background: #fde7e9 !important;
+      color: #8b1a11;
+    }
+
+    @media (max-width: 520px) {
+      main { padding: 22px; }
+      .grid { grid-template-columns: 1fr; gap: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1 id="page-title">Eenhedenomzetter</h1>
+    <p id="description">Gegevens worden geladen...</p>
+
+    <form id="converter-form">
+      <div class="field">
+        <label for="value">Waarde</label>
+        <input id="value" type="number" value="1" step="any" required>
+      </div>
+
+      <div class="grid">
+        <div class="field">
+          <label for="from-unit">Van</label>
+          <select id="from-unit" required></select>
+        </div>
+
+        <div class="field">
+          <label for="to-unit">Naar</label>
+          <select id="to-unit" required></select>
+        </div>
+      </div>
+
+      <button type="submit">Omzetten</button>
+    </form>
+
+    <div id="result" aria-live="polite">Even geduld...</div>
+    <div id="status" aria-live="polite"></div>
+  </main>
+
+  <script>
+    "use strict";
+
+    const JSON_FILE = "eenheden.json";
+    let configuration = null;
+
+    const form = document.getElementById("converter-form");
+    const valueInput = document.getElementById("value");
+    const fromSelect = document.getElementById("from-unit");
+    const toSelect = document.getElementById("to-unit");
+    const resultBox = document.getElementById("result");
+    const statusBox = document.getElementById("status");
+
+    async function loadConfiguration() {
+      try {
+        const response = await fetch(JSON_FILE, { cache: "no-store" });
+
+        if (!response.ok) {
+          throw new Error(`JSON-bestand kon niet worden geladen (${response.status}).`);
+        }
+
+        const data = await response.json();
+        validateConfiguration(data);
+        configuration = data;
+        buildPageFromJson();
+        convert();
+        statusBox.textContent = `Ingelezen uit ${JSON_FILE}.`;
+      } catch (error) {
+        showError(
+          "De omzettingsgegevens konden niet worden geladen. " +
+          "Controleer of index.html en eenheden.json in dezelfde map staan. " +
+          error.message
+        );
+      }
+    }
+
+    function validateConfiguration(data) {
+      if (!data || typeof data !== "object") {
+        throw new Error("De JSON bevat geen geldig object.");
+      }
+
+      if (!data.units || typeof data.units !== "object" || !Object.keys(data.units).length) {
+        throw new Error("De JSON bevat geen eenheden.");
+      }
+
+      for (const [key, unit] of Object.entries(data.units)) {
+        if (!unit.name || !unit.symbol || !Number.isFinite(unit.factor_to_base) || unit.factor_to_base <= 0) {
+          throw new Error(`De eenheid '${key}' is onvolledig of ongeldig.`);
+        }
+      }
+    }
+
+    function buildPageFromJson() {
+      document.title = configuration.title;
+      document.getElementById("page-title").textContent = configuration.title;
+      document.getElementById("description").textContent = configuration.description;
+
+      fromSelect.replaceChildren();
+      toSelect.replaceChildren();
+
+      for (const [key, unit] of Object.entries(configuration.units)) {
+        const optionFrom = new Option(`${unit.name} (${unit.symbol})`, key);
+        const optionTo = new Option(`${unit.name} (${unit.symbol})`, key);
+        fromSelect.add(optionFrom);
+        toSelect.add(optionTo);
+      }
+
+      fromSelect.value = configuration.default_from in configuration.units
+        ? configuration.default_from
+        : Object.keys(configuration.units)[0];
+
+      toSelect.value = configuration.default_to in configuration.units
+        ? configuration.default_to
+        : Object.keys(configuration.units)[0];
+    }
+
+    function convert() {
+      if (!configuration) return;
+
+      const value = Number(valueInput.value);
+      if (!Number.isFinite(value)) {
+        showError("Vul een geldig getal in.");
+        return;
+      }
+
+      const from = configuration.units[fromSelect.value];
+      const to = configuration.units[toSelect.value];
+      const valueInBaseUnit = value * from.factor_to_base;
+      const convertedValue = valueInBaseUnit / to.factor_to_base;
+      const decimals = Number.isInteger(configuration.decimal_places)
+        ? configuration.decimal_places
+        : 6;
+
+      resultBox.classList.remove("error");
+      resultBox.textContent =
+        `${formatNumber(value, decimals)} ${from.symbol} = ` +
+        `${formatNumber(convertedValue, decimals)} ${to.symbol}`;
+    }
+
+    function formatNumber(number, decimals) {
+      return new Intl.NumberFormat("nl-BE", {
+        maximumFractionDigits: decimals
+      }).format(number);
+    }
+
+    function showError(message) {
+      resultBox.classList.add("error");
+      resultBox.textContent = message;
+      statusBox.textContent = "";
+    }
+
+    form.addEventListener("submit", event => {
+      event.preventDefault();
+      convert();
+    });
+
+    valueInput.addEventListener("input", convert);
+    fromSelect.addEventListener("change", convert);
+    toSelect.addEventListener("change", convert);
+
+    loadConfiguration();
+  </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+{
+  "title": "Eenhedenomzetter",
+  "description": "Zet lengtematen om met gegevens uit een JSON-bestand.",
+  "default_from": "m",
+  "default_to": "ft",
+  "decimal_places": 6,
+  "units": {
+    "m": {
+      "name": "meter",
+      "symbol": "m",
+      "factor_to_base": 1.0
+    },
+    "inch": {
+      "name": "inch",
+      "symbol": "in",
+      "factor_to_base": 0.0254
+    },
+    "ft": {
+      "name": "voet",
+      "symbol": "ft",
+      "factor_to_base": 0.3048
+    }
+  }
+}
